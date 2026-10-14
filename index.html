@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>施設予約システム - reserveapp</title>
+    <!-- Favicon data URI to eliminate 404 error -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📅</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -21,8 +22,10 @@
     <header class="bg-indigo-600 text-white shadow-lg sticky top-0 z-30">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <div class="bg-white text-indigo-600 p-2 rounded-lg shadow-md font-bold text-xl">
-                    <i class="fa-solid font-bold fa-calendar-check"></i>
+                <div class="bg-white text-indigo-600 p-2 rounded-lg shadow-md font-bold text-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 002-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
                 </div>
                 <div>
                     <h1 class="font-bold text-lg leading-tight sm:text-xl">施設予約管理システム</h1>
@@ -37,7 +40,9 @@
                     <span id="userName" class="text-xs sm:text-sm font-medium max-w-[120px] sm:max-w-[180px] truncate">ユーザー</span>
                 </div>
                 <button id="logoutBtn" class="bg-indigo-700 hover:bg-indigo-800 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm flex items-center space-x-1 border border-indigo-400/30">
-                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                    </svg>
                     <span class="hidden sm:inline">ログアウト</span>
                 </button>
             </div>
@@ -57,12 +62,13 @@
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
-
-        <!-- 1. Login Required Screen (Displayed when not logged in) -->
+        <!-- 1. Login Required Screen -->
         <section id="loginSection" class="my-12 max-w-md mx-auto">
             <div class="bg-white rounded-2xl shadow-xl p-8 border border-slate-100 text-center">
                 <div class="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl shadow-inner">
-                    <i class="fa-solid fa-lock"></i>
+                    <svg class="w-10 h-10 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
                 </div>
                 <h2 class="text-2xl font-bold text-slate-800 mb-2">ログインが必要です</h2>
                 <p class="text-slate-500 text-sm mb-8">
@@ -79,9 +85,8 @@
                     <span>Google アカウントでログイン</span>
                 </button>
 
-                <!-- Iframe/Fallback mode note for setup -->
                 <div class="mt-6 pt-6 border-t border-slate-100 text-xs text-slate-400">
-                    <p><i class="fa-solid fa-circle-info mr-1"></i> Firebase Authentication (Google Identity Provider) を利用しています。</p>
+                    <p>Firebase Authentication (Google Identity) を使用しています。</p>
                 </div>
             </div>
         </section>
@@ -304,6 +309,8 @@
         import { 
             getAuth, 
             signInWithPopup, 
+            signInWithRedirect,
+            getRedirectResult,
             GoogleAuthProvider, 
             signOut, 
             onAuthStateChanged 
@@ -366,7 +373,12 @@
 
         // Set default date picker to today
         const today = new Date().toISOString().split('T')[0];
-        dateInput.value = today;
+        if (dateInput) dateInput.value = today;
+
+        // Check redirect result on load for browsers blocking popups
+        getRedirectResult(auth).catch((error) => {
+            console.warn("Redirect result handler:", error.message);
+        });
 
         // Authentication State Observer
         onAuthStateChanged(auth, (user) => {
@@ -396,13 +408,22 @@
             }
         });
 
-        // Google Login Handler
+        // Google Login Handler (Handles popup block & Cross-Origin-Opener-Policy seamlessly)
         googleLoginBtn.addEventListener("click", async () => {
             try {
                 await signInWithPopup(auth, googleProvider);
             } catch (error) {
-                console.error("Login Error:", error);
-                showToast("ログインに失敗しました: " + error.message, "error");
+                console.warn("Popup blocked or COOP error. Falling back to redirect auth:", error);
+                // Fallback to redirect authentication if popup is blocked or restricted
+                if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.message.includes('Cross-Origin-Opener-Policy')) {
+                    try {
+                        await signInWithRedirect(auth, googleProvider);
+                    } catch (redirectError) {
+                        showToast("ログインエラー: " + redirectError.message, "error");
+                    }
+                } else {
+                    showToast("ログインに失敗しました: " + error.message, "error");
+                }
             }
         });
 
